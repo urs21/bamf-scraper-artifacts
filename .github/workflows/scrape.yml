@@ -57,3 +57,33 @@ jobs:
           path: artifact-output/*.rds
           if-no-files-found: error
           retention-days: 90
+      
+      - name: Lade Archiv-Repository
+        uses: actions/checkout@v4
+        with:
+          repository: urs21/bamf-scraper-archive
+          token: ${{ secrets.ARCHIVE_TOKEN }}
+          path: archive-repo
+
+      - name: Speichere RDS-Datei dauerhaft im Archiv
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p archive-repo/data
+          cp artifact-output/*.rds archive-repo/data/
+
+          cd archive-repo
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/*.rds
+
+          if git diff --cached --quiet; then
+            echo "Keine neue Datei zum Speichern."
+          else
+            git commit -m "Archiv: neue BAMF-Scraper-Daten"
+            git push
+          fi
+
