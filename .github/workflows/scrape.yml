@@ -1,9 +1,10 @@
+
 name: Scrape Integration Course Finder
 
 on:
   schedule:
-    - cron: '0 7 * * *'   # jeden Tag um 07:00 UTC (09:00 MEZ)
-  workflow_dispatch:       # manuell startbar
+    - cron: '0 7 * * *'
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -13,31 +14,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name:  Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name:  Installiere R
+      - name: Installiere R
         uses: r-lib/actions/setup-r@v2
 
-      - name:  Installiere R-Pakete stabil
+      - name: Installiere R-Pakete stabil
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: httr, tidyr, sf, dplyr, tidyverse
 
-      - name:  Starte Scraper
+      - name: Starte Scraper
         run: Rscript 02_scrape_courses.R
 
-      - name: Commit CSV falls geändert
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bereite neue RDS-Dateien vor
+        shell: bash
         run: |
-          git config --global user.name "urs-bot"
-          git config --global user.email "urs@example.com"
-          git add *.rds
-          git commit -m "Update Kurse RDS" || echo "Keine Änderungen"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git push
-        
+          mkdir -p artifact-output
 
+          shopt -s nullglob
+          found=0
 
+          for f in *.rds; do
+            if ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              mv -- "$f" artifact-output/
+              found=1
+            fi
+          done
 
+          if [ "$found" -ne 1 ]; then
+            echo "Keine neue RDS-Datei gefunden."
+            exit 1
+          fi
+
+          ls -lh artifact-output/
+
+      - name: Speichere neue RDS-Dateien als Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bamf-${{ github.run_id }}
+          path: artifact-output/*.rds
+          if-no-files-found: error
+          retention-days: 30
